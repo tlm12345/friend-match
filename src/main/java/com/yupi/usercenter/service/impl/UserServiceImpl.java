@@ -1,22 +1,33 @@
 package com.yupi.usercenter.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.yupi.usercenter.common.ErrorCode;
+import com.yupi.usercenter.contant.UserConstant;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.User;
 import com.yupi.usercenter.service.UserService;
 import com.yupi.usercenter.mapper.UserMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import static com.yupi.usercenter.contant.UserConstant.ADMIN_ROLE;
 import static com.yupi.usercenter.contant.UserConstant.USER_LOGIN_STATE;
 
 /**
@@ -32,6 +43,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Resource
     private UserMapper userMapper;
+
+    @Resource(name = "getRedisTemplate")
+    private RedisTemplate<String, Object> redisTemplate;
 
     // https://www.code-nav.cn/
 
@@ -172,6 +186,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         safetyUser.setUserRole(originUser.getUserRole());
         safetyUser.setUserStatus(originUser.getUserStatus());
         safetyUser.setCreateTime(originUser.getCreateTime());
+        safetyUser.setTags(originUser.getTags());
         return safetyUser;
     }
 
@@ -185,6 +200,100 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 移除登录态
         request.getSession().removeAttribute(USER_LOGIN_STATE);
         return 1;
+    }
+
+    /**
+     * 根据标签列表查询用户
+     * @param tagNameList
+     * @return
+     */
+    @Override
+    public List<User> searchUserByTags(List<String> tagNameList, int queryType) {
+        if (queryType == 0) return searchUserByTagsInDB(tagNameList);
+        if (queryType == 1) return searchUserByTagsInMM(tagNameList);
+        return Arrays.asList();
+    }
+
+    @Override
+    public boolean isAdmin(User user) {
+        return user != null && user.getUserRole() == ADMIN_ROLE;
+    }
+
+    @Override
+    public Integer updateUser(User user, User currentUser) {
+        long userId = user.getId();
+        if (!isAdmin(currentUser) && userId != currentUser.getId()){
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+
+        User oldUser = userMapper.selectById(userId);
+        if (oldUser == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        return userMapper.updateById(user);
+    }
+
+    @Override
+    public Page<User> getRecommendUser(User loginUser, int pageNo, int pageSize) {
+        String recommendInfoKey = String.format("friendMatch:user:recommend:%s", loginUser.getId());
+        ValueOperations<String, Object> stringObjectValueOperations = redisTemplate.opsForValue();
+
+        Object o = stringObjectValueOperations.get(recommendInfoKey);
+        // cache hint
+        if (o != null){
+            return (Page<User>) o;
+        }
+
+        // cache miss
+        QueryWrapper wrapper = new QueryWrapper();
+        Page<User> page = this.page(new Page<>(pageNo, pageSize), wrapper);
+        // cache the result
+        try {
+            stringObjectValueOperations.set(recommendInfoKey, page, 100000, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            log.error("storing the cache fail", e);
+        }
+        return page;
+    }
+
+
+    /**
+     * 利用sql在数据库进行模糊查询
+     * @param tagNameList
+     * @return
+     */
+    public List<User> searchUserByTagsInDB(List<String> tagNameList){
+        QueryWrapper<User> wrapper = new QueryWrapper<>();
+        for (String tag : tagNameList) {
+            wrapper.like("tags", tag);
+        }
+
+        List<User> users = userMapper.selectList(wrapper);
+        return users;
+    }
+
+    /**
+     * 在内存中筛选
+     * @param tagNameList
+     * @return
+     */
+    public List<User> searchUserByTagsInMM(List<String> tagNameList){
+        QueryWrapper<User> wrapper = new QueryWrapper<>();
+        List<User> users = userMapper.selectList(wrapper);
+
+        return users.stream().filter(user->{
+            if (user == null) return false;
+            String tagListString = user.getTags();
+            List<String> tempTagNameList = new Gson().fromJson(tagListString, new TypeToken<List<String>>() {
+            }.getType());
+
+            for (String tagName : tagNameList) {
+                if (!tempTagNameList.contains(tagName)) return false;
+            }
+            return true;
+        }).collect(Collectors.toList());
+
     }
 
 }

@@ -3,11 +3,16 @@ package com.yupi.usercenter.service;
 // [编程学习交流圈](https://www.code-nav.cn/) 连接万名编程爱好者，一起优秀！20000+ 小伙伴交流分享、40+ 大厂嘉宾一对一答疑、100+ 各方向编程交流群、4000+ 编程问答参考
 
 import com.yupi.usercenter.model.domain.User;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import javax.annotation.Resource;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * 用户服务测试
@@ -16,6 +21,7 @@ import javax.annotation.Resource;
  * @from <a href="https://yupi.icu">编程导航知识星球</a>
  */
 @SpringBootTest
+@Slf4j
 public class UserServiceTest {
 
     @Resource
@@ -111,5 +117,29 @@ public class UserServiceTest {
         userAccount = "yupi";
         result = userService.userRegister(userAccount, userPassword, checkPassword, planetCode);
         Assertions.assertEquals(-1, result);
+    }
+
+    @Test
+    void testSearchUserByTags(){
+        List<String> queryTagList = Arrays.asList("Java", "Python", "C++");
+        userService.count();
+        long startTime = 0;
+        long endTime = 0;
+        long intervalDB = 0;
+        long intervalMM = 0;
+
+        startTime = System.currentTimeMillis();
+        List<User> users1 = userService.searchUserByTags(queryTagList, 1);
+        endTime = System.currentTimeMillis();
+        intervalMM = endTime - startTime;
+
+        startTime = System.currentTimeMillis();
+        List<User> users = userService.searchUserByTags(queryTagList, 0);
+        endTime = System.currentTimeMillis();
+        intervalDB = endTime - startTime;
+
+
+        log.info("sql query Time : " + String.valueOf(intervalDB));
+        log.info("mm query Time : " + String.valueOf(intervalMM));
     }
 }
