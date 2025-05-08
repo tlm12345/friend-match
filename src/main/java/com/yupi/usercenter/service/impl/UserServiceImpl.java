@@ -257,6 +257,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return page;
     }
 
+    @Override
+    public User getLoginUser(HttpServletRequest request) {
+
+        Object attribute = request.getSession().getAttribute(USER_LOGIN_STATE);
+        if (attribute == null) {
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+
+        User oldUser = (User) attribute;
+        User user = this.getById(oldUser.getId());
+        if (user == null) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        return user;
+    }
+
 
     /**
      * 利用sql在数据库进行模糊查询

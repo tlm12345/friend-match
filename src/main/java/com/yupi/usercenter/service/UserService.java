@@ -80,4 +80,6 @@ public interface UserService extends IService<User> {
      * @return
      */
     Page<User> getRecommendUser(User loginUser, int pageNo, int pageSize);
+
+    User getLoginUser(HttpServletRequest request);
 }
