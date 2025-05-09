@@ -14,6 +14,7 @@ import com.yupi.usercenter.service.UserTeamService;
 import jodd.util.StringUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.Date;
@@ -32,6 +33,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
     private UserTeamService userTeamService;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public long addTeam(Team team, User userLogin) {
         //        1. 校验请求参数是否为空
         if (team == null) {
@@ -87,7 +89,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "创建队伍数量过多!");
         }
 //        5. 设置用户id到将要新建的队伍中，插入队伍信息到队伍表中
-        team.setId(userId);
+        team.setUserId(userId);
         boolean save = this.save(team);
         if (!save){
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "系统异常，插入失败!");

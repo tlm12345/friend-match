@@ -49,6 +49,7 @@ public class TeamController {
         User userLogin = userService.getLoginUser(request);
 
         long teamId = teamService.addTeam(team, userLogin);
+
         return ResultUtils.success(teamId);
 
     }
