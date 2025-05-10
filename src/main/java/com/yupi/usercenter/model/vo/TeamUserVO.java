@@ -1,16 +1,17 @@
-package com.yupi.usercenter.model.dto;
+package com.yupi.usercenter.model.vo;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
-import com.yupi.usercenter.common.PageQuery;
+import com.yupi.usercenter.model.domain.User;
 import lombok.Data;
 
 import java.util.Date;
 
 @Data
-public class TeamQueryDTO extends PageQuery {
+public class TeamUserVO {
+
     /**
      * id
      */
@@ -19,35 +20,55 @@ public class TeamQueryDTO extends PageQuery {
     /**
      * 队伍名称
      */
+
     private String name;
 
     /**
      * 描述
      */
+
     private String description;
 
     /**
      * 最大人数
      */
+
     private Integer maxNum;
+
+    /**
+     * 过期时间
+     */
+
+    private Date expireTime;
 
     /**
      * 用户id
      */
+
     private Long userId;
 
     /**
      * 状态 0 - 公开， 1 - 私密， 2 - 加密
      */
+
     private Integer status;
 
     /**
-     * 队伍过期时间
+     * 创建时间
      */
-    private Date expireTime;
+
+    private Date createTime;
 
     /**
-     * 查找关键字，用于管理员对队伍名称和队伍描述同时进行查找
+     * 更新时间
      */
-    private String searchText;
+
+    private Date updateTime;
+
+    /**
+     * 创建该队伍的用户信息(脱敏)
+     */
+    private UserVO createUser;
+
+
 }

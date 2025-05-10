@@ -8,7 +8,10 @@ import com.yupi.usercenter.common.ResultUtils;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.Team;
 import com.yupi.usercenter.model.domain.User;
+import com.yupi.usercenter.model.domain.request.TeamJoinRequest;
+import com.yupi.usercenter.model.domain.request.TeamUpdateRequest;
 import com.yupi.usercenter.model.dto.TeamQueryDTO;
+import com.yupi.usercenter.model.vo.TeamUserVO;
 import com.yupi.usercenter.service.TeamService;
 import com.yupi.usercenter.service.UserService;
 import org.springframework.beans.BeanUtils;
@@ -77,12 +80,14 @@ public class TeamController {
     }
 
     @PostMapping("/update")
-    public BaseResponse<Boolean> updateTeam(@RequestBody Team team){
-        if (team == null) {
+    public BaseResponse<Boolean> updateTeam(@RequestBody TeamUpdateRequest teamUpdateRequest, HttpServletRequest request){
+        if (teamUpdateRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
 
-        boolean res = teamService.updateById(team);
+        User loginUser = userService.getLoginUser(request);
+
+        boolean res = teamService.updateTeam(teamUpdateRequest, loginUser);
         if (!res) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR);
         }
@@ -90,18 +95,17 @@ public class TeamController {
         return ResultUtils.success(true);
     }
 
-    @GetMapping("/get/list")
-    public BaseResponse<List<Team>> getTeams(TeamQueryDTO teamQueryDTO){
+    @GetMapping("/list")
+    public BaseResponse<List<TeamUserVO>> getTeams(TeamQueryDTO teamQueryDTO, HttpServletRequest request){
         if (teamQueryDTO == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
 
-        Team team = new Team();
-        BeanUtils.copyProperties(teamQueryDTO, team);
-        QueryWrapper<Team> wrapper = new QueryWrapper<Team>(team);
-        List<Team> resList = teamService.list(wrapper);
+        User loginUser = userService.getLoginUser(request);
+        boolean isAdmin = userService.isAdmin(loginUser);
+        List<TeamUserVO> teamUserVOS = teamService.listTeams(teamQueryDTO, isAdmin);
 
-        return ResultUtils.success(resList);
+        return ResultUtils.success(teamUserVOS);
     }
 
     @GetMapping("/list/page")
@@ -118,5 +122,16 @@ public class TeamController {
         Page<Team> page = new Page<>(current, pageSize);
         Page<Team> resPage = teamService.page(page, wrapper);
         return ResultUtils.success(resPage);
+    }
+
+    @PostMapping("/join")
+    public BaseResponse<Boolean> joinTeam(TeamJoinRequest teamJoinRequest, HttpServletRequest request){
+        if (teamJoinRequest == null){
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        }
+
+        User loginUser = userService.getLoginUser(request);
+        boolean res = teamService.joinTeam(teamJoinRequest, loginUser);
+        return res == true ? ResultUtils.success(res) : ResultUtils.error(ErrorCode.SYSTEM_ERROR);
     }
 }

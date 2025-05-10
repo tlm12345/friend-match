@@ -3,6 +3,12 @@ package com.yupi.usercenter.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.yupi.usercenter.model.domain.Team;
 import com.yupi.usercenter.model.domain.User;
+import com.yupi.usercenter.model.domain.request.TeamJoinRequest;
+import com.yupi.usercenter.model.domain.request.TeamUpdateRequest;
+import com.yupi.usercenter.model.dto.TeamQueryDTO;
+import com.yupi.usercenter.model.vo.TeamUserVO;
+
+import java.util.List;
 
 
 /**
@@ -14,4 +20,9 @@ public interface TeamService extends IService<Team> {
 
     long addTeam(Team team, User userLogin);
 
+    List<TeamUserVO> listTeams(TeamQueryDTO teamQueryDTO, boolean isAdmin);
+
+    boolean updateTeam(TeamUpdateRequest teamUpdateRequest, User userLogin);
+
+    boolean joinTeam(TeamJoinRequest teamJoinRequest, User userLogin);
 }
