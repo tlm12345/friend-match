@@ -1,13 +1,10 @@
 package com.yupi.usercenter.model.dto;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.yupi.usercenter.common.PageQuery;
 import lombok.Data;
 
 import java.util.Date;
+import java.util.List;
 
 @Data
 public class TeamQueryDTO extends PageQuery {
@@ -15,6 +12,11 @@ public class TeamQueryDTO extends PageQuery {
      * id
      */
     private Long id;
+
+    /**
+     * 批量查询时传入id列表
+     */
+    private List<Long> ids;
 
     /**
      * 队伍名称

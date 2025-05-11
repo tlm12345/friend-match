@@ -8,12 +8,15 @@ import com.yupi.usercenter.common.ResultUtils;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.Team;
 import com.yupi.usercenter.model.domain.User;
+import com.yupi.usercenter.model.domain.UserTeam;
 import com.yupi.usercenter.model.domain.request.TeamJoinRequest;
+import com.yupi.usercenter.model.domain.request.TeamQuitRequest;
 import com.yupi.usercenter.model.domain.request.TeamUpdateRequest;
 import com.yupi.usercenter.model.dto.TeamQueryDTO;
 import com.yupi.usercenter.model.vo.TeamUserVO;
 import com.yupi.usercenter.service.TeamService;
 import com.yupi.usercenter.service.UserService;
+import com.yupi.usercenter.service.UserTeamService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,6 +41,9 @@ public class TeamController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private UserTeamService userTeamService;
+
     /**
      * 创建队伍
      * @param team
@@ -57,16 +63,6 @@ public class TeamController {
 
     }
 
-    @GetMapping("/delete")
-    public BaseResponse<Boolean> deleteTeam(long teamId){
-
-        boolean b = teamService.removeById(teamId);
-        if (b == true) {
-            return ResultUtils.success(b);
-        }else {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-    }
 
     @GetMapping("/get")
     public BaseResponse<Team> getTeam(long teamId) {
@@ -108,6 +104,31 @@ public class TeamController {
         return ResultUtils.success(teamUserVOS);
     }
 
+    @GetMapping("/list/ICreate")
+    public BaseResponse<List<TeamUserVO>> getICreateTeams(HttpServletRequest request){
+        User loginUser = userService.getLoginUser(request);
+
+        TeamQueryDTO teamQueryDTO = new TeamQueryDTO();
+        teamQueryDTO.setUserId(loginUser.getId());
+        // 临时给予管理员权限。这么做是为了复用代码。因为非管理员，无法查看私密队伍。
+        List<TeamUserVO> teamUserVOS = teamService.listTeams(teamQueryDTO, true);
+
+        return ResultUtils.success(teamUserVOS);
+    }
+    @GetMapping("/list/IJoin")
+    public BaseResponse<List<TeamUserVO>> getIJoinedTeams(HttpServletRequest request){
+
+        User loginUser = userService.getLoginUser(request);
+
+        List<Long> userTeamRelationByUserId = userTeamService.getUserTeamRelationByUserId(loginUser.getId());
+        TeamQueryDTO teamQueryDTO = new TeamQueryDTO();
+        teamQueryDTO.setIds(userTeamRelationByUserId);
+        // 临时给予管理员权限。这么做是为了复用代码。因为非管理员，无法查看私密队伍。
+        List<TeamUserVO> teamUserVOS = teamService.listTeams(teamQueryDTO, true);
+
+        return ResultUtils.success(teamUserVOS);
+    }
+
     @GetMapping("/list/page")
     public BaseResponse<Page<Team>> getTeamsByPage(TeamQueryDTO teamQueryDTO){
         if (teamQueryDTO == null) {
@@ -132,6 +153,24 @@ public class TeamController {
 
         User loginUser = userService.getLoginUser(request);
         boolean res = teamService.joinTeam(teamJoinRequest, loginUser);
-        return res == true ? ResultUtils.success(res) : ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        return res == true ? ResultUtils.success(true) : ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+    }
+
+    @PostMapping("/quit")
+    public BaseResponse<Boolean> quitTeam(TeamQuitRequest teamQuitRequest, HttpServletRequest request){
+        if (teamQuitRequest == null){
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        boolean res = teamService.quitTeam(teamQuitRequest, loginUser);
+        return ResultUtils.success(true);
+    }
+
+
+    @GetMapping("/delete")
+    public BaseResponse<Boolean> deleteTeam(long teamId, HttpServletRequest request){
+        User loginUser = userService.getLoginUser(request);
+        boolean b = teamService.deleteTeam(teamId, loginUser);
+        return ResultUtils.success(true);
     }
 }

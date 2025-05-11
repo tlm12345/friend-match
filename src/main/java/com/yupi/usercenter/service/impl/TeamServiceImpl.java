@@ -1,6 +1,7 @@
 package com.yupi.usercenter.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.conditions.query.QueryChainWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.usercenter.common.ErrorCode;
 import com.yupi.usercenter.exception.BusinessException;
@@ -9,6 +10,7 @@ import com.yupi.usercenter.model.domain.Team;
 import com.yupi.usercenter.model.domain.User;
 import com.yupi.usercenter.model.domain.UserTeam;
 import com.yupi.usercenter.model.domain.request.TeamJoinRequest;
+import com.yupi.usercenter.model.domain.request.TeamQuitRequest;
 import com.yupi.usercenter.model.domain.request.TeamUpdateRequest;
 import com.yupi.usercenter.model.dto.TeamQueryDTO;
 import com.yupi.usercenter.model.enums.TeamStatusEnum;
@@ -23,6 +25,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 
 import javax.annotation.Resource;
@@ -153,6 +156,11 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
             Long userId = teamQueryDTO.getUserId();
             if (userId != null){
                 wrapper.eq("userId", userId);
+            }
+
+            List<Long> idsList = teamQueryDTO.getIds();
+            if (!CollectionUtils.isEmpty(idsList)){
+                wrapper.in("id", idsList);
             }
         }
 //           1. 只有管理员才能够查找私密和加密队伍
@@ -302,6 +310,82 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         userTeam.setTeamId(targetTeamId);
         userTeam.setJoinTime(new Date());
         return userTeamService.save(userTeam);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean quitTeam(TeamQuitRequest teamQuitRequest, User loginUser) {
+//        1. 校验请求参数
+        if (teamQuitRequest == null){
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        }
+//        2. 校验队伍是否存在，校验用户是否加入了该队伍
+        Long teamId = teamQuitRequest.getTeamId();
+        if (teamId == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "退出队伍Id为空");
+        Team team = this.getById(teamId);
+        if (team == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "队伍不存在");
+//        3. 如果队伍
+        QueryWrapper<UserTeam> userTeamWrapper = new QueryWrapper<>();
+        userTeamWrapper.eq("teamId", teamId);
+
+        Long userId = loginUser.getId();
+        long count = userTeamService.count(userTeamWrapper);
+//          1. 只剩下一人。且这个人就是队伍拥有者。直接删除该队伍
+        if (count == 1){
+            if(userId == team.getUserId()){
+                this.removeById(teamId);
+            }else{
+                throw new BusinessException(ErrorCode.NO_AUTH);
+            }
+        }else if (count > 1){
+//          2. 还剩下多人。
+//              1. 如果是队长退出，，则队伍拥有人顺位给下一个用户。
+            if (userId.equals(team.getUserId())) {
+                userTeamWrapper.orderByAsc("id").last("limit 2");
+                List<UserTeam> userTeamList = userTeamService.list(userTeamWrapper);
+                Team newTeam = new Team();
+                UserTeam secondUserTeam = userTeamList.get(1);
+                Long newUserId = secondUserTeam.getUserId();
+                if (newUserId == null) throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+                newTeam.setUserId(newUserId);
+                newTeam.setId(teamId);
+                boolean res = this.updateById(newTeam);
+                if (res == false) throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+            }
+        }else {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+        }
+
+//      4. 删除用户-队伍关系。
+        QueryWrapper<UserTeam> wrapper = new QueryWrapper<>();
+        wrapper.eq("teamId", teamId).eq("userId", userId);
+        boolean remove = userTeamService.remove(wrapper);
+
+        return remove;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteTeam(long teamId, User loginUser) {
+//        1. 校验请求参数
+        // 参数可以不校验
+//        2. 校验队伍是否存在
+        Team team = this.getById(teamId);
+        if (team == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "队伍不存在");
+//        3. 判断要删除的队伍的拥有者是否是当前用户
+        Long userId = loginUser.getId();
+        if (!userId.equals(team.getUserId())) throw new BusinessException(ErrorCode.NO_AUTH);
+//        4. 根据判断条件，删除队伍，同时删除所有的用户-队伍关系。
+        //删除队伍
+        boolean res1 = this.removeById(teamId);
+        if (!res1) throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+        // 删除所有相关的用户-队伍关系
+        QueryWrapper<UserTeam> wrapper = new QueryWrapper<>();
+        wrapper.eq("teamId", teamId);
+        boolean res2 = userTeamService.remove(wrapper);
+        if (!res2) throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+
+        return true;
     }
 
 }
