@@ -75,11 +75,9 @@ public interface UserService extends IService<User> {
     /**
      * 获取推荐的用户列表
      * @param loginUser
-     * @param pageNo
-     * @param pageSize
      * @return
      */
-    Page<User> getRecommendUser(User loginUser, int pageNo, int pageSize);
+    List<User> getRecommendUser(long num, User loginUser);
 
     User getLoginUser(HttpServletRequest request);
 }

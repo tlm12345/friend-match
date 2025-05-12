@@ -1,27 +1,29 @@
 package com.yupi.usercenter.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.yupi.usercenter.common.AlgorithmUtils;
 import com.yupi.usercenter.common.ErrorCode;
-import com.yupi.usercenter.contant.UserConstant;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.User;
 import com.yupi.usercenter.service.UserService;
 import com.yupi.usercenter.mapper.UserMapper;
+import jodd.util.collection.MapEntry;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.Arrays;
-import java.util.List;
+import java.lang.reflect.Type;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -234,26 +236,64 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
     @Override
-    public Page<User> getRecommendUser(User loginUser, int pageNo, int pageSize) {
-        String recommendInfoKey = String.format("friendMatch:user:recommend:%s", loginUser.getId());
+    public List<User> getRecommendUser(long num, User loginUser) {
+//        1. 校验用户请求参数
+        if (num <= 0 || num > 20) throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求推荐用户数量不合规(0~20)");
+
+        // 查询缓存，如果没有，再进行实际的业务查询
+        String recommendInfoKey = String.format("friendMatch:user:recommend:%s:%d", loginUser.getId(), num);
         ValueOperations<String, Object> stringObjectValueOperations = redisTemplate.opsForValue();
 
         Object o = stringObjectValueOperations.get(recommendInfoKey);
         // cache hint
         if (o != null){
-            return (Page<User>) o;
+            return (List<User>) o;
         }
 
-        // cache miss
-        QueryWrapper wrapper = new QueryWrapper();
-        Page<User> page = this.page(new Page<>(pageNo, pageSize), wrapper);
-        // cache the result
-        try {
-            stringObjectValueOperations.set(recommendInfoKey, page, 100000, TimeUnit.MILLISECONDS);
-        } catch (Exception e) {
-            log.error("storing the cache fail", e);
+//        2. 获取用户的tags信息。查询数据库，获取所有其他用户的tags信息
+        Long userId = loginUser.getId();
+        String tagsB = loginUser.getTags();
+        Gson gson = new Gson();
+        Type type = new TypeToken<List<String>>() {
+        }.getType();
+        List<String> tagsBList = new Gson().fromJson(tagsB,type);
+        if (CollectionUtils.isEmpty(tagsBList)) throw new BusinessException(ErrorCode.NULL_ERROR, "用户没有标签信息");
+
+        QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
+        userQueryWrapper.select("id", "tags");
+        // 剔除没有标签的用户（这个剔除逻辑不是特别健壮，所以后面仍需要判断，用户的标签是否为空）
+        userQueryWrapper.like("tags", "[_%]");
+        List<User> userList = this.list(userQueryWrapper);
+//        3. 依据算法计算相关性，取前k个最相关的推荐用户。
+        HashMap<Long, Integer> unOrderedEditDisMap = (HashMap<Long, Integer>) userList.stream().filter(item -> {
+            if (item.getId().equals(userId)) return false;
+            String tagsA = item.getTags();
+            List<String> tagsAList = new Gson().fromJson(tagsA, type);
+            if (CollectionUtils.isEmpty(tagsAList)) return false;
+            return true;
+        }).collect(Collectors.toMap(User::getId, item -> {
+            String tagsA = item.getTags();
+            List<String> tagsAList = new Gson().fromJson(tagsA, type);
+            int editDis = AlgorithmUtils.minDistance(tagsAList, tagsBList);
+            return editDis;
+        }));
+        ArrayList<Map.Entry<Long, Integer>> orderingEditDisList = new ArrayList<>(unOrderedEditDisMap.entrySet());
+        orderingEditDisList.sort(Comparator.comparingInt(Map.Entry::getValue));
+
+//        4. 返回推荐用户
+        List<User> res = new ArrayList<>();
+        for(int i = 0; i< num; i++){
+            if (i >= orderingEditDisList.size()){
+                break;
+            }
+            Map.Entry<Long, Integer> entry = orderingEditDisList.get(i);
+            Long id = entry.getKey();
+            User u = this.getById(id);
+            User safetyUser = this.getSafetyUser(u);
+            res.add(safetyUser);
         }
-        return page;
+
+        return res;
     }
 
     @Override

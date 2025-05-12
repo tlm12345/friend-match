@@ -158,11 +158,11 @@ public class UserController {
         return ResultUtils.success(result);
     }
 
-    @GetMapping("recommend")
-    public BaseResponse<Page<User>> recommendUsers(int pageSize, int pageNum, HttpServletRequest request){
-        User user = (User) request.getSession().getAttribute(USER_LOGIN_STATE);
+    @GetMapping("/recommend")
+    public BaseResponse<List<User>> recommendUsers(long num, HttpServletRequest request){
+        User loginUser = userService.getLoginUser(request);
 
-        Page<User> recommendUser = userService.getRecommendUser(user, pageNum, pageSize);
+        List<User> recommendUser = userService.getRecommendUser(num, loginUser);
 
         return ResultUtils.success(recommendUser);
     }

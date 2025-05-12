@@ -45,7 +45,7 @@ public class PreCacheJob {
                     String key = String.format(keyTemplate, aLong);
                     User user = new User();
                     user.setId(aLong);
-                    Page<User> recommendUser = userService.getRecommendUser(user, 1, 8);
+                    List<User> recommendUser = userService.getRecommendUser(3, user);
 
                     try {
                         valueOperations.set(key, recommendUser, 1, TimeUnit.DAYS);
