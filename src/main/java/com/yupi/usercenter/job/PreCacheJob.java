@@ -16,6 +16,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 预热缓存任务
+ */
 @Component
 @Slf4j
 public class PreCacheJob {
